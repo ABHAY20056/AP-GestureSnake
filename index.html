@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>AP-GestureSnake | by Abhay Pandey</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@3.9.0/dist/tf-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@3.9.0/dist/tf-converter.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@3.9.0/dist/tf-backend-webgl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.min.js"></script>
+<style>
+:root{
+  --g:#39ff14;--gd:#1a7a06;--gk:#0d3d03;
+  --bg:#080808;--bdr:#1e3a0e;
+  --red:#ff3131;--amb:#ffb300;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+
+body{
+  background:var(--bg);color:var(--g);
+  font-family:'Share Tech Mono',monospace;
+  min-height:100dvh;display:flex;flex-direction:column;
+  align-items:center;overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,.07) 3px,rgba(0,0,0,.07) 4px);
+}
+
+header{
+  width:100%;text-align:center;
+  padding:12px 8px 6px;
+  border-bottom:1px solid var(--bdr);
+  background:rgba(0,0,0,.5);
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(4px);
+}
+header h1{
+  font-family:'Press Start 2P',monospace;
+  font-size:clamp(9px,2.8vw,17px);
+  color:var(--g);text-shadow:0 0 12px var(--g),0 0 24px var(--gd);
+}
+header p{font-size:clamp(7px,1.9vw,10px);color:var(--gd);margin-top:3px}
+
+#main{
+  display:flex;flex-wrap:wrap;
+  justify-content:center;align-items:flex-start;
+  gap:18px;padding:16px 8px;
+  width:100%;max-width:1100px;
+}
+
+/* ── GAME PANEL ── */
+#game-panel{display:flex;flex-direction:column;align-items:center;gap:10px}
+
+#scoreboard{
+  display:flex;gap:22px;
+  font-family:'Press Start 2P',monospace;
+  font-size:clamp(7px,1.8vw,10px);
+}
+.sc span{color:var(--gd);display:block;font-size:.7em;margin-bottom:2px}
+.sc strong{color:var(--g);text-shadow:0 0 6px var(--g)}
+
+#gcw{
+  position:relative;
+  border:2px solid var(--gd);
+  box-shadow:0 0 22px rgba(57,255,20,.14),inset 0 0 40px rgba(0,0,0,.6);
+  background:#020d01;
+  touch-action:none;user-select:none;
+}
+#gameCanvas{display:block}
+
+/* overlay */
+#overlay{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:rgba(2,13,1,.88);gap:12px;
+}
+#overlay h2{
+  font-family:'Press Start 2P',monospace;
+  font-size:clamp(10px,3vw,15px);
+  color:var(--g);text-shadow:0 0 14px var(--g);
+  text-align:center;line-height:1.7;
+}
+#overlay p{
+  font-size:clamp(8px,2vw,10px);color:var(--gd);
+  text-align:center;padding:0 14px;line-height:1.9;
+}
+#startBtn{
+  font-family:'Press Start 2P',monospace;
+  font-size:clamp(8px,2vw,11px);
+  background:transparent;color:var(--g);
+  border:2px solid var(--g);padding:10px 22px;
+  cursor:pointer;text-shadow:0 0 8px var(--g);
+  box-shadow:0 0 14px rgba(57,255,20,.3);
+  transition:all .18s;margin-top:4px;
+  touch-action:manipulation;
+}
+#startBtn:active,#startBtn:hover{
+  background:var(--g);color:#020d01;
+  box-shadow:0 0 26px rgba(57,255,20,.7);
+}
+
+/* direction indicator */
+#dir-indicator{
+  display:grid;grid-template-columns:repeat(3,30px);
+  grid-template-rows:repeat(2,30px);gap:3px;
+}
+.db{
+  width:30px;height:30px;border:1px solid var(--gd);
+  background:var(--gk);color:var(--gd);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;border-radius:4px;transition:all .12s;
+}
+.db.active{background:var(--g);color:#020d01;box-shadow:0 0 10px var(--g);border-color:var(--g)}
+.db.e{background:transparent;border-color:transparent}
+
+/* mobile swipe hint */
+#swipe-hint{
+  display:none;
+  font-family:'Press Start 2P',monospace;
+  font-size:7px;color:var(--gd);
+  letter-spacing:.5px;text-align:center;margin-top:2px;
+}
+
+/* ── DESKTOP CAMERA PANEL ── */
+#cam-panel{
+  display:flex;flex-direction:column;
+  align-items:center;gap:10px;min-width:220px;
+}
+#cam-panel h3{
+  font-family:'Press Start 2P',monospace;
+  font-size:clamp(7px,1.7vw,10px);color:var(--gd);text-align:center;
+}
+#cam-wrap{
+  position:relative;border:2px solid var(--gd);
+  box-shadow:0 0 12px rgba(57,255,20,.1);
+  overflow:hidden;border-radius:4px;width:260px;height:195px;
+}
+#webcam{width:260px;height:195px;object-fit:cover;transform:scaleX(-1);display:block;background:#020d01}
+#handCanvas{position:absolute;top:0;left:0;width:260px;height:195px;transform:scaleX(-1)}
+#gesture-label{
+  font-family:'Press Start 2P',monospace;
+  font-size:clamp(7px,1.8vw,10px);
+  color:var(--amb);text-shadow:0 0 8px var(--amb);
+  text-align:center;min-height:18px;
+}
+#cam-status{font-size:clamp(7px,1.8vw,9px);color:var(--gd);text-align:center;line-height:1.7}
+#cam-status.err{color:var(--red)}
+
+#guide{border:1px solid var(--bdr);padding:10px 14px;background:#070f05;width:100%;max-width:260px;border-radius:4px}
+#guide h4{font-family:'Press Start 2P',monospace;font-size:7px;color:var(--gd);margin-bottom:8px}
+.gr{display:flex;align-items:center;gap:8px;font-size:11px;color:#5aaa3a;margin:3px 0}
+.gr .ic{font-size:15px;width:20px;text-align:center}
+
+/* ══════════════════
+   MOBILE LAYOUT
+   ══════════════════ */
+@media(max-width:600px){
+  #main{padding:6px 4px;gap:6px}
+  #game-panel{width:100%}
+  #cam-panel{display:none}           /* hide desktop cam panel */
+  #swipe-hint{display:block}
+  #dir-indicator{display:none}
+
+  /* floating PiP camera — bottom-right of game canvas */
+  #mobile-pip{
+    display:flex;flex-direction:column;align-items:center;
+    position:absolute;bottom:8px;right:8px;z-index:50;
+  }
+  #pip-wrap{
+    position:relative;
+    width:90px;height:68px;
+    border:2px solid var(--gd);border-radius:6px;
+    overflow:hidden;box-shadow:0 0 10px rgba(57,255,20,.3);
+    background:#020d01;
+  }
+  #pip-wrap video{width:90px;height:68px;object-fit:cover;transform:scaleX(-1);display:block}
+  #pip-wrap canvas{position:absolute;top:0;left:0;width:90px;height:68px;transform:scaleX(-1)}
+  #pip-label{
+    font-family:'Press Start 2P',monospace;
+    font-size:5.5px;color:var(--amb);
+    text-shadow:0 0 5px var(--amb);
+    margin-top:3px;text-align:center;
+  }
+  #pip-status{font-size:6px;color:var(--gd);text-align:center;margin-top:1px;max-width:90px;line-height:1.4}
+}
+
+/* hide pip on desktop */
+@media(min-width:601px){#mobile-pip{display:none}}
+
+@keyframes flicker{0%,100%{opacity:1}50%{opacity:.42}}
+.flicker{animation:flicker .7s ease-in-out infinite}
+
+/* swipe direction flash */
+#swipe-arrow{
+  position:fixed;font-size:48px;opacity:0;
+  pointer-events:none;z-index:8888;
+  transition:opacity .12s;
+  text-shadow:0 0 20px var(--g);
+  filter:drop-shadow(0 0 8px var(--g));
+}
+#swipe-arrow.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🐍 AP-GestureSnake</h1>
+  <p>&nbsp; Swipe to move &nbsp;·&nbsp; Hand gestures supported</p>
+</header>
+
+<div id="swipe-arrow">▶</div>
+
+<div id="main">
+
+  <!-- ═══ GAME ═══ -->
+  <div id="game-panel">
+    <div id="scoreboard">
+      <div class="sc"><span>SCORE</span><strong id="score">0</strong></div>
+      <div class="sc"><span>BEST</span><strong id="best">0</strong></div>
+      <div class="sc"><span>LEVEL</span><strong id="level">1</strong></div>
+    </div>
+
+    <div id="gcw">
+      <canvas id="gameCanvas"></canvas>
+
+      <!-- Mobile floating PiP -->
+      <div id="mobile-pip">
+        <div id="pip-wrap">
+          <video id="webcam-mob" autoplay muted playsinline></video>
+          <canvas id="handCanvas-mob"></canvas>
+        </div>
+        <div id="pip-label">— NO HAND —</div>
+        <div id="pip-status">Loading…</div>
+      </div>
+
+      <!-- Start / Game Over overlay -->
+      <div id="overlay">
+        <h2>🐍 SNAKE</h2>
+        <p id="overlay-msg">
+          📱 <b>Swipe anywhere</b> to move<br>
+          ☝️ Or show hand to camera<br><br>
+          💻 Arrow keys / WASD also work
+        </p>
+        <button id="startBtn">▶ START</button>
+      </div>
+    </div>
+
+    <div id="swipe-hint">← SWIPE ANYWHERE ON SCREEN TO MOVE →</div>
+
+    <!-- Desktop d-pad indicator -->
+    <div id="dir-indicator">
+      <div class="db e"></div><div class="db" id="d-UP">▲</div><div class="db e"></div>
+      <div class="db" id="d-LEFT">◀</div><div class="db" id="d-DOWN">▼</div><div class="db" id="d-RIGHT">▶</div>
+    </div>
+  </div>
+
+  <!-- ═══ DESKTOP CAMERA ═══ -->
+  <div id="cam-panel">
+    <h3>📷 GESTURE CAM</h3>
+    <div id="cam-wrap">
+      <video id="webcam" autoplay muted playsinline></video>
+      <canvas id="handCanvas"></canvas>
+    </div>
+    <div id="gesture-label">— NO HAND —</div>
+    <div id="cam-status">Loading model…</div>
+    <div id="guide">
+      <h4>HOW TO CONTROL</h4>
+      <div class="gr"><span class="ic">👆</span>Swipe screen anywhere</div>
+      <div class="gr"><span class="ic">⌨️</span>Arrow keys / WASD</div>
+      <div class="gr"><span class="ic">☝️</span>Point finger UP / DOWN</div>
+      <div class="gr"><span class="ic">👈</span>Point finger LEFT / RIGHT</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// CANVAS
+// ══════════════════════════════════════════
+const COLS=20,ROWS=20;
+let CELL;
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+const overlay=document.getElementById('overlay');
+const isMob=()=>window.innerWidth<=600;
+
+function resizeCanvas(){
+  const vw=Math.min(window.innerWidth-(isMob()?8:32),520);
+  const vh=isMob()?window.innerHeight*.60:window.innerHeight*.72;
+  CELL=Math.floor(Math.min(vw,vh)/COLS);
+  CELL=Math.max(CELL,14);
+  canvas.width=COLS*CELL; canvas.height=ROWS*CELL;
+}
+resizeCanvas();
+window.addEventListener('resize',()=>{resizeCanvas();if(!gameRunning)drawGrid();});
+
+// ══════════════════════════════════════════
+// GAME STATE
+// ══════════════════════════════════════════
+let snake,dir,nextDir,food,gameRunning,gameOver,score,best,level,speed,loopId,lastTick;
+
+function initGame(){
+  snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir={x:1,y:0};nextDir={x:1,y:0};
+  food=randomFood();score=0;level=1;speed=280;
+  gameOver=false;lastTick=0;updateHUD();
+}
+
+function randomFood(){
+  let p;
+  do{p={x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)};}
+  while(snake.some(s=>s.x===p.x&&s.y===p.y));
+  return p;
+}
+
+function gameLoop(ts){
+  if(!gameRunning)return;
+  loopId=requestAnimationFrame(gameLoop);
+  if(ts-lastTick<speed)return;
+  lastTick=ts;tick();
+}
+
+function tick(){
+  if(!(nextDir.x===-dir.x&&nextDir.y===-dir.y))dir=nextDir;
+  const h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+  if(h.x<0||h.x>=COLS||h.y<0||h.y>=ROWS)return endGame();
+  if(snake.some(s=>s.x===h.x&&s.y===h.y))return endGame();
+  snake.unshift(h);
+  if(h.x===food.x&&h.y===food.y){
+    score+=10*level;food=randomFood();
+    if(score>=level*100){level++;speed=Math.max(120,speed-10);}
+    updateHUD();
+  }else{snake.pop();}
+  draw();
+}
+
+// ══════════════════════════════════════════
+// DRAW
+// ══════════════════════════════════════════
+function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);drawGrid();drawFood();drawSnake();}
+
+function drawGrid(){
+  ctx.fillStyle='#020d01';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle='rgba(57,255,20,.04)';ctx.lineWidth=.5;
+  for(let c=0;c<COLS;c++)for(let r=0;r<ROWS;r++)ctx.strokeRect(c*CELL,r*CELL,CELL,CELL);
+}
+
+function drawFood(){
+  const x=food.x*CELL,y=food.y*CELL;
+  ctx.shadowColor='#ff3131';ctx.shadowBlur=14;
+  ctx.fillStyle='#ff3131';ctx.fillRect(x+2,y+2,CELL-4,CELL-4);
+  ctx.shadowBlur=0;ctx.fillStyle='rgba(255,255,255,.3)';
+  ctx.fillRect(x+4,y+4,(CELL-8)*.5,(CELL-8)*.5);
+}
+
+function drawSnake(){
+  snake.forEach((seg,i)=>{
+    const t=i/snake.length,g=Math.floor(255-t*160);
+    ctx.fillStyle=i===0?'#39ff14':`rgb(0,${g},0)`;
+    ctx.shadowColor=i===0?'#39ff14':'transparent';
+    ctx.shadowBlur=i===0?7:0;
+    ctx.fillRect(seg.x*CELL+1,seg.y*CELL+1,CELL-2,CELL-2);
+    if(i===0){
+      ctx.fillStyle='#020d01';ctx.shadowBlur=0;
+      const ex=dir.x===1?CELL-5:dir.x===-1?3:CELL/2-4;
+      const ey=dir.y===1?CELL-5:dir.y===-1?3:CELL/2-4;
+      ctx.fillRect(seg.x*CELL+ex,seg.y*CELL+ey,3,3);
+      ctx.fillRect(seg.x*CELL+(CELL-ex-3),seg.y*CELL+(CELL-ey-3),3,3);
+    }
+    ctx.shadowBlur=0;
+  });
+}
+
+function endGame(){
+  gameRunning=false;cancelAnimationFrame(loopId);
+  ctx.fillStyle='rgba(255,49,49,.14)';ctx.fillRect(0,0,canvas.width,canvas.height);
+  best=Math.max(best||0,score);
+  try{localStorage.setItem('snakeBest',best);}catch(e){}
+  document.getElementById('best').textContent=best;
+  overlay.querySelector('h2').textContent='💀 GAME OVER';
+  overlay.querySelector('h2').classList.add('flicker');
+  document.getElementById('overlay-msg').innerHTML=
+    `Score: <strong style="color:var(--g)">${score}</strong>&ensp;Best: <strong style="color:var(--g)">${best}</strong><br><br>Swipe in any direction to restart`;
+  document.getElementById('startBtn').textContent='▶ PLAY AGAIN';
+  overlay.style.display='flex';gameOver=true;
+}
+
+function startGame(){
+  overlay.style.display='none';
+  overlay.querySelector('h2').classList.remove('flicker');
+  initGame();gameRunning=true;requestAnimationFrame(gameLoop);
+}
+
+function updateHUD(){
+  document.getElementById('score').textContent=score;
+  document.getElementById('level').textContent=level;
+}
+
+// ══════════════════════════════════════════
+// DIRECTION
+// ══════════════════════════════════════════
+const DIRS={UP:{x:0,y:-1},DOWN:{x:0,y:1},LEFT:{x:-1,y:0},RIGHT:{x:1,y:0}};
+
+function applyDir(d){
+  const v=DIRS[d];if(!v)return;
+  if(!gameRunning){if(gameOver)startGame();return;}
+  if(v.x===-dir.x&&v.y===-dir.y)return;
+  nextDir=v;highlightDir(d);
+}
+
+function highlightDir(d){
+  ['UP','DOWN','LEFT','RIGHT'].forEach(k=>{
+    const el=document.getElementById('d-'+k);
+    if(el)el.classList.toggle('active',k===d);
+  });
+}
+
+// keyboard
+document.addEventListener('keydown',e=>{
+  const m={ArrowUp:'UP',ArrowDown:'DOWN',ArrowLeft:'LEFT',ArrowRight:'RIGHT',
+    w:'UP',s:'DOWN',a:'LEFT',d:'RIGHT',W:'UP',S:'DOWN',A:'LEFT',D:'RIGHT'};
+  if(m[e.key]){applyDir(m[e.key]);e.preventDefault();}
+  if(e.key===' '&&!gameRunning)startGame();
+});
+
+// ══════════════════════════════════════════
+// SWIPE — anywhere on screen
+// ══════════════════════════════════════════
+let sx=0,sy=0,swipeActive=false;
+const arrowEl=document.getElementById('swipe-arrow');
+let arrowTmr;
+const arrowMap={UP:'▲',DOWN:'▼',LEFT:'◀',RIGHT:'▶'};
+
+function flashArrow(d,cx,cy){
+  arrowEl.textContent=arrowMap[d];
+  arrowEl.style.left=(cx-24)+'px';
+  arrowEl.style.top=(cy-24)+'px';
+  arrowEl.classList.add('show');
+  clearTimeout(arrowTmr);
+  arrowTmr=setTimeout(()=>arrowEl.classList.remove('show'),280);
+}
+
+document.addEventListener('touchstart',e=>{
+  if(e.target===document.getElementById('startBtn'))return;
+  sx=e.touches[0].clientX;sy=e.touches[0].clientY;swipeActive=true;
+},{passive:true});
+
+document.addEventListener('touchmove',e=>{
+  if(!swipeActive)return;
+  const dx=e.touches[0].clientX-sx;
+  const dy=e.touches[0].clientY-sy;
+  if(Math.max(Math.abs(dx),Math.abs(dy))<26)return;
+  swipeActive=false;
+  let d=Math.abs(dx)>Math.abs(dy)?(dx>0?'RIGHT':'LEFT'):(dy>0?'DOWN':'UP');
+  applyDir(d);
+  flashArrow(d,e.touches[0].clientX,e.touches[0].clientY);
+},{passive:true});
+
+document.addEventListener('touchend',()=>{swipeActive=false;},{passive:true});
+
+// start button
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('startBtn').addEventListener('touchend',e=>{e.preventDefault();startGame();},{passive:false});
+
+// ══════════════════════════════════════════
+// HANDPOSE CAMERA
+// ══════════════════════════════════════════
+let handModel=null,detectRunning=false;
+let lastGDir=null,holdCount=0;
+const HOLD=3;
+
+function getCamEls(){
+  if(isMob()) return {
+    video:document.getElementById('webcam-mob'),
+    hcanv:document.getElementById('handCanvas-mob'),
+    label:document.getElementById('pip-label'),
+    status:document.getElementById('pip-status'),
+  };
+  return {
+    video:document.getElementById('webcam'),
+    hcanv:document.getElementById('handCanvas'),
+    label:document.getElementById('gesture-label'),
+    status:document.getElementById('cam-status'),
+  };
+}
+
+async function setupCamera(){
+  const {video,status}=getCamEls();
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia(
+      {video:{facingMode:'user',width:{ideal:320},height:{ideal:240}},audio:false});
+    video.srcObject=stream;
+    await new Promise(r=>video.onloadedmetadata=r);
+    const {hcanv}=getCamEls();
+    hcanv.width=video.videoWidth||320;hcanv.height=video.videoHeight||240;
+    status.textContent='Loading model…';return true;
+  }catch(e){
+    status.className='err';status.textContent='No cam – swipe to play';return false;
+  }
+}
+
+async function loadModel(){
+  const {status}=getCamEls();
+  try{
+    await tf.setBackend('webgl');await tf.ready();
+    handModel=await handpose.load({detectionConfidence:.78});
+    status.textContent='✓ Ready – show hand!';return true;
+  }catch(e){
+    const {status}=getCamEls();
+    status.className='err';status.textContent='Model failed';return false;
+  }
+}
+
+function getDir(lm){
+  const w=lm[0],t=lm[8];
+  const vx=t[0]-w[0],vy=t[1]-w[1];
+  const mag=Math.sqrt(vx*vx+vy*vy);
+  if(mag<45)return null;
+  if(Math.abs(vx)>Math.abs(vy))return vx>0?'LEFT':'RIGHT';
+  return vy>0?'DOWN':'UP';
+}
+
+async function detectLoop(){
+  if(!handModel||!detectRunning)return;
+  const {video,hcanv,label}=getCamEls();
+  const hctx=hcanv.getContext('2d');
+  try{
+    const preds=await handModel.estimateHands(video,false);
+    hctx.clearRect(0,0,hcanv.width,hcanv.height);
+    if(preds.length>0){
+      const lm=preds[0].landmarks;
+      drawSkel(hctx,lm,hcanv);
+      const gd=getDir(lm);
+      if(gd){
+        if(gd===lastGDir)holdCount++;else{holdCount=1;lastGDir=gd;}
+        const ic={UP:'☝️',DOWN:'👇',LEFT:'👈',RIGHT:'👉'};
+        label.textContent=ic[gd]+' '+gd;
+        if(holdCount>=HOLD)applyDir(gd);
+      }else{label.textContent='✋ HOLD STILL';holdCount=0;lastGDir=null;}
+    }else{label.textContent='— NO HAND —';holdCount=0;lastGDir=null;}
+  }catch(e){}
+  requestAnimationFrame(detectLoop);
+}
+
+function drawSkel(hctx,lm,hcanv){
+  const c=[[0,1],[1,2],[2,3],[3,4],
+    [0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],
+    [0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],
+    [5,9],[9,13],[13,17]];
+  hctx.strokeStyle='rgba(57,255,20,.55)';hctx.lineWidth=1.2;
+  c.forEach(([a,b])=>{
+    hctx.beginPath();hctx.moveTo(lm[a][0],lm[a][1]);hctx.lineTo(lm[b][0],lm[b][1]);hctx.stroke();
+  });
+  lm.forEach((pt,i)=>{
+    hctx.beginPath();hctx.arc(pt[0],pt[1],i===8?5:2.5,0,Math.PI*2);
+    hctx.fillStyle=i===8?'#ff3131':'rgba(57,255,20,.9)';hctx.fill();
+  });
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+try{best=parseInt(localStorage.getItem('snakeBest')||'0');}catch(e){best=0;}
+document.getElementById('best').textContent=best;
+drawGrid();
+
+(async()=>{
+  const camOk=await setupCamera();if(!camOk)return;
+  const mdOk=await loadModel();if(!mdOk)return;
+  detectRunning=true;requestAnimationFrame(detectLoop);
+})();
+</script>
+</body>
+</html>
