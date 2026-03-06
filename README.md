@@ -70,44 +70,6 @@ Built with **zero dependencies**, runs 100% in the browser. No install. No backe
 
 ---
 
-## 🚀 Getting Started
-
-### Option 1 — Just open it
-```bash
-# Download index.html and open in Chrome/Firefox
-open index.html
-```
-
-### Option 2 — Clone & run locally
-```bash
-git clone https://github.com/YOUR_USERNAME/AP-GestureSnake.git
-cd AP-GestureSnake
-# Open index.html in your browser — done!
-```
-
-> ⚠️ **Camera/gesture features require HTTPS** when hosted online (works fine on localhost too).
-
----
-
-## 🌐 Deploy for Free
-
-### Vercel (Recommended)
-```bash
-npm i -g vercel
-vercel --prod
-```
-Or drag & drop the folder at [vercel.com/new](https://vercel.com/new)
-
-### GitHub Pages
-1. Push this repo to GitHub
-2. Go to **Settings → Pages → Branch: main → Save**
-3. Live at `https://YOUR_USERNAME.github.io/AP-GestureSnake`
-
-### Netlify
-Drag & drop `index.html` at [app.netlify.com/drop](https://app.netlify.com/drop)
-
----
-
 ## 🛠️ Tech Stack
 
 | Technology | Purpose |
@@ -158,5 +120,6 @@ Free to use, modify, and distribute with attribution.
 **Made with 🖤 by Abhay Pandey**
 
 *If you like this project, drop a ⭐ on GitHub!*
+
 
 </div>
